@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TailorApp",
+    "name": "Tailor Master",
     "slug": "TailorApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,10 +16,29 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.mobeendev.tailormaster"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-router",
+      "expo-sharing",
+      "expo-font"
+    ],
+    "scheme": "tailormaster",
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "76475794-6727-4ef9-a462-599bab460a01"
+      }
+    },
+    "owner": "mobeendev"
   }
 }

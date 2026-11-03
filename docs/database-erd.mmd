@@ -1,0 +1,105 @@
+erDiagram
+    Shops ||--o{ Customers : has
+    Shops ||--o{ MeasurementTemplates : defines
+    Shops ||--o| ShopSettings : configures
+    Shops ||--o{ SyncChanges : queues
+    MeasurementTemplates ||--o{ TemplateVersions : versions
+    TemplateVersions ||--o{ TemplateFields : contains
+    TemplateVersions ||--o{ CustomerMeasurements : describes
+    Customers ||--o{ CustomerMeasurements : saves
+    Customers ||--o{ Orders : places
+    Orders ||--o{ OrderItems : contains
+    CustomerMeasurements ||--o{ OrderItems : reused_by
+    Orders ||--o{ Payments : receives
+
+    Shops {
+        TEXT id PK
+        TEXT shop_id UK "equals id"
+        TEXT name
+        TEXT data "JSON record"
+    }
+    Customers {
+        TEXT id PK
+        TEXT shop_id FK
+        TEXT name
+        TEXT phone
+        INTEGER archived
+        TEXT data
+    }
+    MeasurementTemplates {
+        TEXT id PK
+        TEXT shop_id FK
+        TEXT name
+        TEXT data
+    }
+    TemplateVersions {
+        TEXT id PK
+        TEXT shop_id FK "composite FK with template_id"
+        TEXT template_id FK
+        INTEGER version "positive; unique with template_id"
+        TEXT data
+    }
+    TemplateFields {
+        TEXT id PK "composite PK with version_id"
+        TEXT version_id PK,FK
+        TEXT field_key "unique with version_id"
+        TEXT field_type
+        INTEGER is_required
+        INTEGER display_order
+        TEXT field_config "JSON"
+    }
+    CustomerMeasurements {
+        TEXT id PK
+        TEXT shop_id FK "composite FK with customer_id"
+        TEXT customer_id FK
+        TEXT template_id FK "composite FK with template_version"
+        INTEGER template_version FK
+        TEXT measurements_json "JSON values"
+        TEXT data
+    }
+    Orders {
+        TEXT id PK
+        TEXT shop_id FK "composite FK with customer_id"
+        TEXT customer_id FK
+        TEXT delivery_date
+        INTEGER total_minor "nonnegative"
+        TEXT data
+    }
+    OrderItems {
+        TEXT id PK
+        TEXT shop_id FK "part of both composite FKs"
+        TEXT order_id FK
+        TEXT measurement_id FK
+        TEXT data
+    }
+    Payments {
+        TEXT id PK
+        TEXT shop_id FK "composite FK with order_id"
+        TEXT order_id FK
+        INTEGER amount_minor "positive"
+        TEXT data
+    }
+    ShopSettings {
+        TEXT shop_id PK,FK
+        TEXT data
+    }
+    DeviceSettings {
+        TEXT id PK "local settings row"
+        TEXT data
+    }
+    SyncChanges {
+        INTEGER sequence PK "autoincrement"
+        TEXT record_id "logical reference, no SQL FK"
+        TEXT shop_id FK
+        TEXT entity
+        INTEGER record_version
+        TEXT device_id
+        TEXT data
+        INTEGER acknowledged
+    }
+    SchemaMigrations {
+        INTEGER version PK
+    }
+    MigrationMarkers {
+        TEXT id PK
+    }

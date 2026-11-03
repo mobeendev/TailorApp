@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-type Customer = { id: number; name: string; phone: string; chest: string; waist: string; length: string };
-type Order = { id: number; customerId: number; garment: string; status: number };
+import { Customer, Order, loadWorkshop, saveWorkshop } from './src/storage';
 const stages = ['New', 'Cutting', 'Stitching', 'Ready', 'Delivered'];
 const urStages = ['نیا', 'کٹائی', 'سلائی', 'تیار', 'حوالہ کیا'];
 export default function App() {
+  const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [saveState, setSaveState] = useState<'saving' | 'saved' | 'error'>('saved');
+  const [retry, setRetry] = useState(0);
+  const [orderCustomer, setOrderCustomer] = useState<Customer | null>(null);
+  const [formError, setFormError] = useState('');
   const [urdu, setUrdu] = useState(false);
   const [tab, setTab] = useState(0);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -15,27 +20,42 @@ export default function App() {
   const [modal, setModal] = useState(false);
   const [search, setSearch] = useState('');
   const [draft, setDraft] = useState({ name: '', phone: '', chest: '', waist: '', length: '' });
+  useEffect(() => {
+    if (ready) return;
+    let active = true;
+    setLoadError(false);
+    loadWorkshop().then(data => {
+      if (!active) return;
+      if (data) { setCustomers(data.customers); setOrders(data.orders); setUrdu(data.urdu); }
+      setReady(true);
+    }).catch(() => { if (active) setLoadError(true); });
+    return () => { active = false; };
+  }, [retry]);
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    setSaveState('saving');
+    saveWorkshop({ version: 1, customers, orders, urdu }).then(() => {
+      if (active) setSaveState('saved');
+    }).catch(() => { if (active) setSaveState('error'); });
+    return () => { active = false; };
+  }, [ready, customers, orders, urdu, retry]);
   const t = (en: string, ur: string) => urdu ? ur : en;
   const textStyle = { textAlign: urdu ? 'right' as const : 'left' as const, writingDirection: urdu ? 'rtl' as const : 'ltr' as const };
-  function open(customer?: Customer) { setEditing(customer ?? null); setDraft(customer ?? { name: '', phone: '', chest: '', waist: '', length: '' }); setModal(true); }
+  function open(customer?: Customer) { setFormError(''); setEditing(customer ?? null); setDraft(customer ?? { name: '', phone: '', chest: '', waist: '', length: '' }); setModal(true); }
   function save() {
-    if (!draft.name.trim()) return Alert.alert(t('Customer name is required', 'گاہک کا نام درج کریں'));
+    if (!draft.name.trim()) return setFormError(t('Customer name is required', 'گاہک کا نام درج کریں'));
     for (const value of [draft.chest, draft.waist, draft.length]) {
-      if (value && (!Number.isFinite(Number(value)) || Number(value) <= 0)) return Alert.alert(t('Enter positive measurements in inches', 'پیمائش انچ میں درست درج کریں'));
+      if (value && (!Number.isFinite(Number(value)) || Number(value) <= 0)) return setFormError(t('Enter positive measurements in inches', 'پیمائش انچ میں درست درج کریں'));
     }
     const customer = { ...draft, name: draft.name.trim(), id: editing?.id ?? Date.now() };
     setCustomers(current => editing ? current.map(c => c.id === editing.id ? customer : c) : [...current, customer]);
     setModal(false); setTab(1);
   }
-  function addOrder(customer: Customer) {
-    Alert.alert(t('Choose garment', 'لباس منتخب کریں'), customer.name, [
-      { text: t('Shalwar kameez', 'شلوار قمیض'), onPress: () => createOrder(customer, 'Shalwar kameez') },
-      { text: t('Thobe', 'ثوب'), onPress: () => createOrder(customer, 'Thobe') },
-      { text: t('Cancel', 'منسوخ'), style: 'cancel' },
-    ]);
-  }
-  function createOrder(customer: Customer, garment: string) { setOrders(current => [...current, { id: Date.now(), customerId: customer.id, garment, status: 0 }]); setTab(2); }
+  function addOrder(customer: Customer) { setOrderCustomer(customer); }
+  function createOrder(customer: Customer, garment: string) { setOrderCustomer(null); setOrders(current => [...current, { id: Date.now(), customerId: customer.id, garment, status: 0 }]); setTab(2); }
   const labels = [t('Overview', 'خلاصہ'), t('Customers', 'گاہک'), t('Orders', 'آرڈرز')];
+  if (!ready) return <SafeAreaView style={s.modalSafe}><View style={s.content}><Text style={s.title}>{loadError ? 'Unable to open workshop' : 'Opening your workshop…'}</Text>{loadError && <><Text style={s.body}>Your saved records have not been changed. Retry loading to continue.</Text><Pressable style={s.primary} onPress={() => setRetry(n => n + 1)}><Text style={s.primaryText}>Retry</Text></Pressable></>}</View></SafeAreaView>;
   return <SafeAreaView style={s.safe}>
     <StatusBar style="light" />
     <View style={s.header}><View><Text style={s.brand}>✂  {t('TAILOR / دفتر', 'درزی / TAILOR')}</Text><Text style={s.headerSub}>{t('A little more order. A perfect fit.', 'ہر پیمائش درست، ہر کام منظم۔')}</Text></View><Pressable accessibilityLabel="Switch language" onPress={() => setUrdu(!urdu)} style={s.language}><Text style={s.languageText}>{urdu ? 'English' : 'اردو'}</Text></Pressable></View>
@@ -43,7 +63,7 @@ export default function App() {
       <Text style={[s.eyebrow, textStyle]}>{t('YOUR WORKSHOP, AT A GLANCE', 'آپ کی دکان ایک نظر میں')}</Text>
       <Text style={[s.title, textStyle]}>{labels[tab]}</Text>
       {tab === 0 && <>
-        <View style={s.hero}><Text style={[s.heroTitle, textStyle]}>{t('Made to measure.\nManaged with care.', 'ناپ کے مطابق۔\nتوجہ کے ساتھ۔')}</Text><Text style={[s.heroCopy, textStyle]}>{t('Keep your customers, measurements and orders together.', 'گاہک، پیمائش اور آرڈرز ایک جگہ رکھیں۔')}</Text><Pressable style={s.primary} onPress={() => open()}><Text style={s.primaryText}>＋ {t('Add your first customer', 'گاہک شامل کریں')}</Text></Pressable></View>
+        <View style={s.hero}><Text style={[s.heroTitle, textStyle]}>{t('Made to measure.\nManaged with care.', 'ناپ کے مطابق۔\nتوجہ کے ساتھ۔')}</Text><Text style={[s.heroCopy, textStyle]}>{t('Keep your customers, measurements and orders together.', 'گاہک، پیمائش اور آرڈرز ایک جگہ رکھیں۔')}</Text><Pressable style={s.primary} onPress={() => open()}><Text style={s.primaryText}>＋ {t(customers.length ? 'Add a customer' : 'Add your first customer', 'گاہک شامل کریں')}</Text></Pressable></View>
         <View style={s.stats}>{[[customers.length, t('Customers', 'گاہک')], [orders.filter(o => o.status < 4).length, t('In progress', 'زیرِ تکمیل')], [orders.filter(o => o.status === 3).length, t('Ready', 'تیار')]].map(([value, label]) => <View key={label} style={s.stat}><Text style={s.statValue}>{value}</Text><Text style={s.muted}>{label}</Text></View>)}</View>
         <Text style={[s.section, textStyle]}>{t('Your daily workflow', 'روزانہ کا کام')}</Text>
         {[t('01   Add a customer and their measurements', '۰۱   گاہک اور پیمائش درج کریں'), t('02   Create a garment order', '۰۲   لباس کا آرڈر بنائیں'), t('03   Track cutting, stitching and delivery', '۰۳   کٹائی، سلائی اور حوالگی دیکھیں')].map(line => <View key={line} style={s.card}><Text style={[s.body, textStyle]}>{line}</Text></View>)}
@@ -59,10 +79,12 @@ export default function App() {
         {orders.length === 0 && <><Text style={[s.empty, textStyle]}>{t('A clear workbench. Your orders will appear here.', 'ابھی کوئی آرڈر نہیں۔ آپ کے آرڈرز یہاں نظر آئیں گے۔')}</Text><Pressable style={s.primary} onPress={() => setTab(1)}><Text style={s.primaryText}>{t('Open customer book', 'گاہک کی فہرست کھولیں')}</Text></Pressable></>}
         {orders.map(o => <View key={o.id} style={s.card}><Text style={s.eyebrow}>#{String(o.id).slice(-6)}</Text><Text style={[s.section, textStyle]}>{customers.find(c => c.id === o.customerId)?.name}</Text><Text style={[s.muted, textStyle]}>{o.garment === 'Thobe' ? t('Thobe', 'ثوب') : t('Shalwar kameez', 'شلوار قمیض')}</Text><Pressable accessibilityLabel={t('Advance order status', 'آرڈر کی حالت آگے بڑھائیں')} disabled={o.status === 4} style={s.badge} onPress={() => setOrders(current => current.map(item => item.id === o.id ? { ...item, status: item.status + 1 } : item))}><Text style={s.link}>{(urdu ? urStages : stages)[o.status]} {o.status < 4 ? ' →' : ' ✓'}</Text></Pressable></View>)}
       </>}
-      <Text style={[s.note, textStyle]}>{t('Prototype • Data resets when the app restarts', 'ابتدائی نمونہ • ایپ دوبارہ کھولنے پر ڈیٹا ختم ہو جاتا ہے')}</Text>
+      <Text accessibilityLiveRegion="polite" style={[s.note, textStyle]}>{saveState === 'saved' ? t('Saved on this device • No cloud backup', 'اس آلے پر محفوظ • کلاؤڈ بیک اپ نہیں') : saveState === 'saving' ? t('Saving…', 'محفوظ ہو رہا ہے…') : t('Could not save. Keep the app open and retry.', 'محفوظ نہیں ہوا۔ ایپ کھلی رکھیں اور دوبارہ کوشش کریں۔')}</Text>
+      {saveState === 'error' && <Pressable style={s.secondary} onPress={() => setRetry(n => n + 1)}><Text style={s.link}>{t('Retry saving', 'دوبارہ محفوظ کریں')}</Text></Pressable>}
     </ScrollView>
     <View style={s.nav}>{labels.map((label, i) => <Pressable key={i} accessibilityRole="tab" accessibilityState={{ selected: tab === i }} style={[s.navItem, tab === i && s.navActive]} onPress={() => setTab(i)}><Text style={[s.navText, tab === i && s.link]}>{['▦', '♙', '☷'][i]}  {label}</Text></Pressable>)}</View>
-    <Modal visible={modal} animationType="slide" onRequestClose={() => setModal(false)}><SafeAreaView style={s.modalSafe}><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled"><Pressable onPress={() => setModal(false)}><Text style={s.link}>{t('Close', 'بند کریں')} ×</Text></Pressable><Text style={[s.title, textStyle]}>{editing ? t('Customer details', 'گاہک کی تفصیل') : t('New customer', 'نیا گاہک')}</Text><Text style={[s.muted, textStyle]}>{t('Measurements are in inches. You can add them later.', 'پیمائش انچ میں ہے۔ آپ بعد میں بھی درج کر سکتے ہیں۔')}</Text>{(['name', 'phone', 'chest', 'waist', 'length'] as const).map((field, i) => <View key={field}><Text style={[s.fieldLabel, textStyle]}>{[t('Full name *', 'پورا نام *'), t('Phone', 'فون'), t('Chest (in)', 'سینہ (انچ)'), t('Waist (in)', 'کمر (انچ)'), t('Garment length (in)', 'لباس کی لمبائی (انچ)')][i]}</Text><TextInput style={[s.input, textStyle]} value={draft[field]} onChangeText={value => setDraft(current => ({ ...current, [field]: value }))} keyboardType={field === 'name' ? 'default' : field === 'phone' ? 'phone-pad' : 'decimal-pad'} /></View>)}<Pressable style={s.primary} onPress={save}><Text style={s.primaryText}>{t('Save customer', 'گاہک محفوظ کریں')}</Text></Pressable></ScrollView></KeyboardAvoidingView></SafeAreaView></Modal>
+    <Modal visible={orderCustomer !== null} transparent animationType="fade" onRequestClose={() => setOrderCustomer(null)}><View style={{ flex: 1, justifyContent: 'center', backgroundColor: '#0008', padding: 24 }}><View style={s.card}><Text style={s.section}>{t('Choose garment', 'لباس منتخب کریں')}</Text><Text style={s.body}>{orderCustomer?.name}</Text>{['Shalwar kameez', 'Thobe'].map(garment => <Pressable key={garment} style={s.primary} onPress={() => orderCustomer && createOrder(orderCustomer, garment)}><Text style={s.primaryText}>{garment === 'Thobe' ? t('Thobe', 'ثوب') : t('Shalwar kameez', 'شلوار قمیض')}</Text></Pressable>)}<Pressable style={s.secondary} onPress={() => setOrderCustomer(null)}><Text style={s.link}>{t('Cancel', 'منسوخ')}</Text></Pressable></View></View></Modal>
+    <Modal visible={modal} animationType="slide" onRequestClose={() => setModal(false)}><SafeAreaView style={s.modalSafe}><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled"><Pressable onPress={() => setModal(false)}><Text style={s.link}>{t('Close', 'بند کریں')} ×</Text></Pressable><Text style={[s.title, textStyle]}>{editing ? t('Customer details', 'گاہک کی تفصیل') : t('New customer', 'نیا گاہک')}</Text><Text style={[s.muted, textStyle]}>{t('Measurements are in inches. You can add them later.', 'پیمائش انچ میں ہے۔ آپ بعد میں بھی درج کر سکتے ہیں۔')}</Text>{(['name', 'phone', 'chest', 'waist', 'length'] as const).map((field, i) => <View key={field}><Text style={[s.fieldLabel, textStyle]}>{[t('Full name *', 'پورا نام *'), t('Phone', 'فون'), t('Chest (in)', 'سینہ (انچ)'), t('Waist (in)', 'کمر (انچ)'), t('Garment length (in)', 'لباس کی لمبائی (انچ)')][i]}</Text><TextInput style={[s.input, textStyle]} value={draft[field]} onChangeText={value => setDraft(current => ({ ...current, [field]: value }))} keyboardType={field === 'name' ? 'default' : field === 'phone' ? 'phone-pad' : 'decimal-pad'} /></View>)}{formError ? <Text accessibilityRole="alert" style={{ color: '#A33131' }}>{formError}</Text> : null}<Pressable style={s.primary} onPress={save}><Text style={s.primaryText}>{t('Save customer', 'گاہک محفوظ کریں')}</Text></Pressable></ScrollView></KeyboardAvoidingView></SafeAreaView></Modal>
   </SafeAreaView>;
 }
 const s = StyleSheet.create({

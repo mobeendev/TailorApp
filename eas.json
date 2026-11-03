@@ -1,0 +1,10 @@
+{
+  "cli": { "version": ">= 19.0.0" },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_DEMO_MODE": "0" }
+    }
+  }
+}
