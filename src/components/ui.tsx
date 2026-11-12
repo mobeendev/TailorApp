@@ -55,7 +55,7 @@ export function Pair({ children }: { children: React.ReactNode }) {
 export function Row({ children }: {
     children: React.ReactNode;
 }) { const styles = useStyles(); const { device } = useStore(); return <View style={[styles.row, { flexDirection: rtl(device.language) ? 'row-reverse' : 'row' }]}>{children}</View>; }
-export function Input({ label, value, onChange, numeric = false, multiline = false, error, placeholder }: {
+export function Input({ label, value, onChange, numeric = false, multiline = false, error, placeholder, labelLines }: {
     label: string;
     value: string;
     onChange: (v: string) => void;
@@ -63,12 +63,14 @@ export function Input({ label, value, onChange, numeric = false, multiline = fal
     multiline?: boolean;
     error?: string;
     placeholder?: string;
+    /** Reserve this many label lines so inputs in a grid row line up even when one label wraps. */
+    labelLines?: number;
 }) {
     const styles = useStyles();
     const colors = useColors();
     const { device } = useStore();
     const [focused, setFocused] = useState(false);
-    return <View style={{ gap: 8 }}><Text style={{ fontSize: 12, fontWeight: '600', color: '#4D686F', textAlign: rtl(device.language) ? 'right' : 'left' }}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={onChange} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} keyboardType={numeric ? 'decimal-pad' : 'default'} multiline={multiline} placeholder={placeholder} placeholderTextColor="#A0AFB0" underlineColorAndroid="transparent" style={[styles.input, { borderColor: error ? '#C45D56' : focused ? colors.green : colors.line, backgroundColor: '#fff', textAlign: rtl(device.language) ? 'right' : 'left', ...(multiline ? { minHeight: 95, textAlignVertical: 'top' as const } : {}) }]}/>{error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}</View>;
+    return <View style={{ gap: 8 }}><Text numberOfLines={labelLines} style={{ fontSize: 12, lineHeight: 16, fontWeight: '600', color: '#4D686F', textAlign: rtl(device.language) ? 'right' : 'left', ...(labelLines ? { minHeight: labelLines * (device.language === 'ur' ? 18 : 16) } : {}) }}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={onChange} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} keyboardType={numeric ? 'decimal-pad' : 'default'} multiline={multiline} placeholder={placeholder} placeholderTextColor="#A0AFB0" underlineColorAndroid="transparent" style={[styles.input, { borderColor: error ? '#C45D56' : focused ? colors.green : colors.line, backgroundColor: '#fff', textAlign: rtl(device.language) ? 'right' : 'left', ...(multiline ? { minHeight: 95, textAlignVertical: 'top' as const } : {}) }]}/>{error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}</View>;
 }
 export function SearchInput({ label, value, onChange, autoFocus = false }: {
     autoFocus?: boolean;

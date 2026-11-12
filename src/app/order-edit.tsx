@@ -11,6 +11,7 @@ import type { Field, Value } from '../domain/model';
 import { label } from '../localization';
 import { garmentName, displayTimestamp } from '../domain/displayNames';
 import { findCustomers } from '../domain/ease';
+import { withRecordDefaults } from '../domain/recordDefaults';
 import { formatMoney, money, validateValues } from '../domain/validation';
 
 export default function OrderEdit() {
@@ -60,7 +61,7 @@ export default function OrderEdit() {
                     return <Card compact key={m.id}>
                         <Txt>{index === 0 ? `${t('latestMeasurement')} · ` : ''}{label(template.labels, store.device.language)} · {displayTimestamp(m.createdAt, store.device.language)} · {m.id.slice(-4)}</Txt>
                         {items[m.id] !== undefined && <Txt>{t('measurementSelected')}</Txt>}
-                        {!editing && <Pair><Button secondary disabled={Boolean(draft)} title={t(items[m.id] !== undefined ? 'removeMeasurementFromOrder' : 'useSameMeasurement')} onPress={() => { setItems(current => { const next = { ...current }; if (next[m.id] !== undefined) delete next[m.id]; else next[m.id] = 1; return next; }); setError(''); }}/><Button secondary disabled={Boolean(draft) || !template.isActive || template.archived} title={t('updateMeasurement')} onPress={() => { try { const copy = copyMeasurement(store.data, shop.id, customerId, m.id); setDraft({ sourceId: m.id, templateId: copy.templateId, fields: copy.target.fields, values: copy.values, skipped: copy.skipped }); setMeasurementErrors({}); setExpandedMeasurement(null); setError(''); } catch { setError('copyUnavailable'); } }}/></Pair>}
+                        {!editing && <Pair><Button secondary disabled={Boolean(draft)} title={t(items[m.id] !== undefined ? 'removeMeasurementFromOrder' : 'useSameMeasurement')} onPress={() => { setItems(current => { const next = { ...current }; if (next[m.id] !== undefined) delete next[m.id]; else next[m.id] = 1; return next; }); setError(''); }}/><Button secondary disabled={Boolean(draft) || !template.isActive || template.archived} title={t('updateMeasurement')} onPress={() => { try { const copy = copyMeasurement(store.data, shop.id, customerId, m.id); setDraft({ sourceId: m.id, templateId: copy.templateId, fields: copy.target.fields, values: withRecordDefaults(copy.target.fields, copy.values, store.data, shop.id), skipped: copy.skipped }); setMeasurementErrors({}); setExpandedMeasurement(null); setError(''); } catch { setError('copyUnavailable'); } }}/></Pair>}
                         {!editing && <Button secondary disabled={Boolean(draft)} title={t(expandedMeasurement === m.id ? 'hideMeasurement' : 'viewMeasurement')} onPress={() => setExpandedMeasurement(expandedMeasurement === m.id ? null : m.id)}/>}
                         {expandedMeasurement === m.id && !editing && version && <DynamicForm garmentSections={template.systemKey === 'shalwar-kameez'} fields={version.fields} values={m.values} onChange={() => {}} readOnly/>}
                         {editing && <><Txt muted>{t('updateMeasurementHint')}</Txt>{draft.skipped > 0 && <Txt>{t('copyMeasurementHint')} {t('fieldsSkipped')}: {draft.skipped}</Txt>}

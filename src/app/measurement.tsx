@@ -8,6 +8,7 @@ import { copyMeasurement, measurementHistory, measurementVersion } from '../doma
 import { useI18n, useShop, useStore } from '../store';
 import { label } from '../localization';
 import { availableTemplate } from '../domain/availableTemplate';
+import { withRecordDefaults } from '../domain/recordDefaults';
 import { Button, Card, Notice, Pair, Screen, Txt } from '../components/ui';
 import { DynamicForm } from '../components/DynamicForm';
 export default function Measurement() {
@@ -23,7 +24,8 @@ export default function Measurement() {
     const template = available?.id === templateId ? available : undefined;
     const version = existing ? measurementVersion(store.data, existing) : store.data.templateVersions.find(v => v.templateId === templateId && v.version === template?.activeVersion && v.shopId === shop.id);
     const defaults = Object.fromEntries(version?.fields.filter(f => f.enabled && f.defaultValue !== undefined).map(f => [f.fieldKey, f.defaultValue!]) ?? []);
-    const [values, setValues] = useState<Record<string, Value>>(existing?.values ?? draft?.values ?? defaults);
+    // New records get the next serial number and today's date; saved records are shown exactly as stored.
+    const [values, setValues] = useState<Record<string, Value>>(() => existing?.values ?? withRecordDefaults(version?.fields ?? [], draft?.values ?? defaults, store.data, shop.id));
     const [copied, setCopied] = useState(draft);
     const [confirmCopy, setConfirmCopy] = useState(false);
     const [dirty, setDirty] = useState(false);
@@ -34,7 +36,7 @@ export default function Measurement() {
     function copyLatest() {
         try {
             const result = copyMeasurement(store.data, shop.id, customerId, latest.id);
-            setValues(result.values); setCopied(result); setErrors({}); setError(''); setDirty(false); setConfirmCopy(false);
+            setValues(withRecordDefaults(result.target.fields, result.values, store.data, shop.id)); setCopied(result); setErrors({}); setError(''); setDirty(false); setConfirmCopy(false);
         } catch { setError('copyUnavailable'); }
     }
     if ((id && !existing) || !store.data.customers.some(c => c.id === customerId && c.shopId === shop.id)) return <Screen title={t('measurement')}><Txt>{t('notFound')}</Txt></Screen>;
