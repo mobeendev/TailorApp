@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Save } from 'lucide-react-native';
 import { useI18n, useShop, useStore } from '../store';
-import { Button, Input, Notice, Screen } from '../components/ui';
+import { Button, Card, Input, Notice, Screen } from '../components/ui';
 import { saveCustomer } from '../domain/services';
 export default function CustomerEdit() { const { id, returnToOrder } = useLocalSearchParams<{
     id?: string;
     returnToOrder?: string;
-}>(); const store = useStore(); const shop = useShop()!; const t = useI18n(); const previous = store.data.customers.find(c => c.id === id && c.shopId === shop.id); const [form, setForm] = useState(previous ?? { name: '', phone: '', address: '', notes: '' }); const [error, setError] = useState(''); return <Screen title={t(id ? 'edit' : 'newCustomer')}>{(['name', 'phone', 'address', 'notes'] as const).map(k => <Input key={k} label={`${t(k)}${k === 'name' ? ' *' : ''}`} value={form[k]} multiline={k === 'notes'} onChange={v => setForm({ ...form, [k]: v })}/>)}<Notice error={error}/><Button title={t('save')} onPress={async () => { try {
+}>(); const store = useStore(); const shop = useShop()!; const t = useI18n(); const previous = store.data.customers.find(c => c.id === id && c.shopId === shop.id); const [form, setForm] = useState(previous ?? { name: '', phone: '', address: '', notes: '' }); const [error, setError] = useState(''); return <Screen title={t(id ? 'edit' : 'newCustomer')}><Card>{(['name', 'phone', 'address', 'notes'] as const).map(k => <Input key={k} label={`${t(k)}${k === 'name' ? ' *' : ''}`} value={form[k]} multiline={k === 'notes'} keyboardType={k === 'phone' ? 'phone-pad' : undefined} autoCapitalize={k === 'name' ? 'words' : undefined} onChange={v => setForm({ ...form, [k]: v })}/>)}</Card><Notice error={error}/><Button icon={Save} title={t('save')} onPress={async () => { try {
     const result = saveCustomer(store.data, store.ctx, shop.id, form, id);
     await store.commit(result.state);
     if (returnToOrder === '1') router.dismissTo({ pathname: '/order-edit', params: { customerId: result.customerId } });
@@ -15,4 +16,3 @@ export default function CustomerEdit() { const { id, returnToOrder } = useLocalS
 catch (e) {
     setError((e as Error).message);
 } }}/></Screen>; }
-

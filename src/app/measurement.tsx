@@ -1,15 +1,17 @@
 import { displayTimestamp } from '../domain/displayNames';
 import React, { useState } from 'react';
+import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { ArrowLeftRight, BookOpen, ClipboardCheck, Copy, Pencil, Save } from 'lucide-react-native';
 import { type Value } from '../domain/model';
 import { saveMeasurement } from '../domain/services';
 import { validateValues } from '../domain/validation';
 import { copyMeasurement, measurementHistory, measurementVersion } from '../domain/measurementHistory';
 import { useI18n, useShop, useStore } from '../store';
-import { label } from '../localization';
+import { label, rtl } from '../localization';
 import { availableTemplate } from '../domain/availableTemplate';
 import { withRecordDefaults } from '../domain/recordDefaults';
-import { Button, Card, Notice, Pair, Screen, Txt } from '../components/ui';
+import { Avatar, Button, Card, EmptyState, Notice, Pair, Screen, Txt } from '../components/ui';
 import { DynamicForm } from '../components/DynamicForm';
 export default function Measurement() {
     const { id, customerId, sourceId, returnToOrder } = useLocalSearchParams<{ id?: string; customerId: string; sourceId?: string; returnToOrder?: string }>();
@@ -39,20 +41,23 @@ export default function Measurement() {
             setValues(withRecordDefaults(result.target.fields, result.values, store.data, shop.id)); setCopied(result); setErrors({}); setError(''); setDirty(false); setConfirmCopy(false);
         } catch { setError('copyUnavailable'); }
     }
-    if ((id && !existing) || !store.data.customers.some(c => c.id === customerId && c.shopId === shop.id)) return <Screen title={t('measurement')}><Txt>{t('notFound')}</Txt></Screen>;
+    if ((id && !existing) || !store.data.customers.some(c => c.id === customerId && c.shopId === shop.id)) return <Screen title={t('measurement')}><EmptyState title={t('notFound')}/></Screen>;
+    const name = store.data.customers.find(c => c.id === customerId)?.name ?? '';
+    const subtitle = [!existing && template ? label(template.labels, store.device.language) : '', version ? `${t('version')} ${version.version}` : ''].filter(Boolean).join(' · ');
     return <Screen compact key={String(review)} title={t('measurement')}>
-        <Txt title>{store.data.customers.find(c => c.id === customerId)?.name}</Txt><Txt muted>{t('unitNotice')}</Txt>
-        {!existing && template && <Txt>{label(template.labels, store.device.language)}</Txt>}
-        {!existing && !review && latest && <Button secondary title={t('copyLatestMeasurement')} onPress={() => dirty ? setConfirmCopy(true) : copyLatest()}/>}
-        {confirmCopy && <Card><Txt>{t('replaceMeasurementDraft')}</Txt><Button title={t('confirm')} onPress={copyLatest}/><Button secondary title={t('cancel')} onPress={() => setConfirmCopy(false)}/></Card>}
-        {copied && <Card><Txt>{t('measurementCopied')}</Txt><Txt muted>{displayTimestamp(copied.source.createdAt, store.device.language)} · {t('version')} {copied.source.templateVersion} → {copied.target.version}</Txt><Txt>{t('fieldsCopied')}: {copied.copied} · {t('fieldsSkipped')}: {copied.skipped}</Txt><Txt muted>{t('copyMeasurementHint')}</Txt></Card>}
-        <Button secondary title={t('guide')} onPress={() => router.push('/guide')}/>
-        {version ? <><Txt>{t('version')} {version.version}</Txt><DynamicForm garmentSections={store.data.templates.find(item => item.id === templateId)?.systemKey === 'shalwar-kameez'} fields={version.fields} values={values} onChange={(k, v) => { setValues({ ...values, [k]: v }); setDirty(true); }} errors={errors} readOnly={review}/></> : <Txt>{t('templateRequired')}</Txt>}
+        <Card compact>
+            <View style={{ flexDirection: rtl(store.device.language) ? 'row-reverse' : 'row', alignItems: 'center', gap: 12 }}><Avatar name={name}/><View style={{ flex: 1, gap: 2 }}><Txt heading>{name}</Txt>{subtitle ? <Txt muted>{subtitle}</Txt> : null}</View></View>
+            <Txt muted>{t('unitNotice')}</Txt>
+            <Pair>{!existing && !review && latest && <Button secondary compact icon={Copy} title={t('copyLatestMeasurement')} onPress={() => dirty ? setConfirmCopy(true) : copyLatest()}/>}<Button secondary compact icon={BookOpen} title={t('guide')} onPress={() => router.push('/guide')}/></Pair>
+        </Card>
+        {confirmCopy && <Card compact><Notice info="replaceMeasurementDraft"/><Pair><Button secondary title={t('cancel')} onPress={() => setConfirmCopy(false)}/><Button icon={Copy} title={t('confirm')} onPress={copyLatest}/></Pair></Card>}
+        {copied && <Card compact><Notice success="measurementCopied"/><Txt muted>{displayTimestamp(copied.source.createdAt, store.device.language)} · {t('version')} {copied.source.templateVersion} → {copied.target.version}</Txt><Txt>{t('fieldsCopied')}: {copied.copied} · {t('fieldsSkipped')}: {copied.skipped}</Txt><Txt muted>{t('copyMeasurementHint')}</Txt></Card>}
+        {version ? <DynamicForm garmentSections={store.data.templates.find(item => item.id === templateId)?.systemKey === 'shalwar-kameez'} fields={version.fields} values={values} onChange={(k, v) => { setValues({ ...values, [k]: v }); setDirty(true); }} errors={errors} readOnly={review}/> : <Notice error="templateRequired"/>}
         <Notice error={error}/>
-        {!existing && version && (review ? <><Pair><Button secondary title={t('edit')} onPress={() => setReview(false)}/><Button title={t('saveMeasurement')} onPress={async () => {
+        {!existing && version && (review ? <Pair><Button secondary icon={Pencil} title={t('edit')} onPress={() => setReview(false)}/><Button icon={Save} title={t('saveMeasurement')} onPress={async () => {
             try { const result = saveMeasurement(store.data, store.ctx, shop.id, customerId, templateId, values); await store.commit(result.state); if (returnToOrder === '1') router.dismissTo({ pathname: '/order-edit', params: { customerId, measurementId: result.measurementId } }); else router.replace({ pathname: '/customer', params: { id: customerId } }); }
             catch (e) { setError((e as Error).message); }
-        }}/></Pair></> : <Button title={t('review')} onPress={() => { const e = validateValues(version.fields, values); setErrors(e); if (!Object.keys(e).length) setReview(true); }}/>) }
-        {existing && <>{template && <Button title={t('copyMeasurement')} onPress={() => router.push({ pathname: '/measurement', params: { customerId, sourceId: existing.id } })}/>}<Button secondary title={t('compareMeasurements')} onPress={() => router.push({ pathname: '/measurement-compare', params: { customerId, templateId: existing.templateId, newId: existing.id } })}/></>}
+        }}/></Pair> : <Button icon={ClipboardCheck} title={t('review')} onPress={() => { const e = validateValues(version.fields, values); setErrors(e); if (!Object.keys(e).length) setReview(true); }}/>) }
+        {existing && <>{template && <Button icon={Copy} title={t('copyMeasurement')} onPress={() => router.push({ pathname: '/measurement', params: { customerId, sourceId: existing.id } })}/>}<Button secondary icon={ArrowLeftRight} title={t('compareMeasurements')} onPress={() => router.push({ pathname: '/measurement-compare', params: { customerId, templateId: existing.templateId, newId: existing.id } })}/></>}
     </Screen>;
 }

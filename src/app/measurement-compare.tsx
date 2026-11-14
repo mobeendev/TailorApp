@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
+import { ArrowLeftRight, Check } from 'lucide-react-native';
 import type { Unit, Value } from '../domain/model';
 import { compareMeasurements, measurementHistory } from '../domain/measurementHistory';
 import { useI18n, useShop, useStore } from '../store';
 import { optionName, displayTimestamp } from '../domain/displayNames';
-import { label } from '../localization';
-import { Card, Choice, Screen, Toggle, Txt } from '../components/ui';
+import { label, rtl } from '../localization';
+import { Avatar, Card, Choice, EmptyState, FieldLabel, Notice, Pill, Screen, Toggle, Txt, useColors } from '../components/ui';
+import { Text } from '../components/AppText';
 export default function MeasurementCompare() {
     const params = useLocalSearchParams<{ customerId: string; templateId?: string; newId?: string }>();
-    const { data, device } = useStore(); const shop = useShop()!; const t = useI18n();
+    const { data, device } = useStore(); const shop = useShop()!; const t = useI18n(); const colors = useColors();
     const history = measurementHistory(data, shop.id, params.customerId);
     const templates = data.templates.filter(v => v.shopId === shop.id && history.some(m => m.templateId === v.id));
     const [templateId, setTemplateId] = useState(params.templateId ?? history[0]?.templateId ?? '');
@@ -25,22 +27,26 @@ export default function MeasurementCompare() {
     }
     const options = matching.map(m => ({ value: m.id, label: `${displayTimestamp(m.createdAt, device.language)} · ${t('version')} ${m.templateVersion} · ${m.id.slice(-4)}` }));
     const rows = matching.some(m => m.id === oldId) && matching.some(m => m.id === newId) && oldId !== newId ? compareMeasurements(data, shop.id, params.customerId, oldId, newId) : [];
-    if (!customer) return <Screen title={t('compareMeasurements')}><Txt>{t('notFound')}</Txt></Screen>;
-    return <Screen title={t('compareMeasurements')}><Txt title>{customer.name}</Txt>
-        <Choice value={templateId} options={templates.map(v => ({ value: v.id, label: label(v.labels, device.language) }))} onChange={id => { const records = history.filter(m => m.templateId === id); setTemplateId(id); setNewId(records[0]?.id ?? ''); setOldId(records[1]?.id ?? ''); }}/>
-        {matching.length < 2 ? <Card><Txt>{t('needTwoMeasurements')}</Txt></Card> : <>
-            <Txt>{t('beforeMeasurement')}</Txt><Choice value={oldId} options={options.filter(o => o.value !== newId)} onChange={setOldId}/>
-            <Txt>{t('afterMeasurement')}</Txt><Choice value={newId} options={options.filter(o => o.value !== oldId)} onChange={setNewId}/>
-            <Txt muted>{t('comparisonHint')}</Txt><Toggle title={t('onlyChangedFields')} value={onlyChanged} onChange={setOnlyChanged}/>
-            <Txt>{t('changedFields')}: {rows.filter(r => r.changed).length} {t('of')} {rows.length}</Txt>
-            {onlyChanged && !rows.some(r => r.changed) && <Card><Txt>{t('noMeasurementChanges')}</Txt></Card>}
-            {rows.filter(r => !onlyChanged || r.changed).map(row => <Card key={row.field.fieldKey}>
-                <Txt title>{label(row.field.labels, device.language)}</Txt>
-                <View style={{ flexDirection: device.language === 'en' ? 'row' : 'row-reverse', gap: 16 }}>
-                    <View style={{ flex: 1 }}><Txt muted>{t('beforeMeasurement')}</Txt><Txt>{value(row.before, row.beforeUnit, row.field.fieldKey)}</Txt>{!row.oldField && <Txt muted>{t('fieldAbsent')}</Txt>}</View>
-                    <View style={{ flex: 1 }}><Txt muted>{t('afterMeasurement')}</Txt><Txt>{value(row.after, row.afterUnit, row.field.fieldKey)}</Txt>{!row.newField && <Txt muted>{t('fieldAbsent')}</Txt>}</View>
+    if (!customer) return <Screen title={t('compareMeasurements')}><EmptyState title={t('notFound')}/></Screen>;
+    const dir = rtl(device.language) ? 'row-reverse' as const : 'row' as const;
+    const changedCount = rows.filter(r => r.changed).length;
+    return <Screen title={t('compareMeasurements')}>
+        <View style={{ flexDirection: dir, alignItems: 'center', gap: 12 }}><Avatar name={customer.name}/><View style={{ flex: 1 }}><Txt title>{customer.name}</Txt></View></View>
+        {templates.length > 1 && <Choice value={templateId} options={templates.map(v => ({ value: v.id, label: label(v.labels, device.language) }))} onChange={id => { const records = history.filter(m => m.templateId === id); setTemplateId(id); setNewId(records[0]?.id ?? ''); setOldId(records[1]?.id ?? ''); }}/>}
+        {matching.length < 2 ? <Notice info="needTwoMeasurements"/> : <>
+            <Card>
+                <View style={{ gap: 8 }}><FieldLabel>{t('beforeMeasurement')}</FieldLabel><Choice value={oldId} options={options.filter(o => o.value !== newId)} onChange={setOldId}/></View>
+                <View style={{ gap: 8 }}><FieldLabel>{t('afterMeasurement')}</FieldLabel><Choice value={newId} options={options.filter(o => o.value !== oldId)} onChange={setNewId}/></View>
+                <Txt muted>{t('comparisonHint')}</Txt>
+                <Toggle title={t('onlyChangedFields')} value={onlyChanged} onChange={setOnlyChanged}/>
+            </Card>
+            <Pill label={`${t('changedFields')}: ${changedCount} ${t('of')} ${rows.length}`} tone={changedCount ? 'warning' : 'success'} icon={ArrowLeftRight}/>
+            {onlyChanged && !rows.some(r => r.changed) && <Notice success="noMeasurementChanges"/>}
+            {rows.filter(r => !onlyChanged || r.changed).map(row => <Card compact key={row.field.fieldKey}>
+                <View style={{ flexDirection: dir, alignItems: 'center', gap: 10 }}><View style={{ flex: 1 }}><Txt strong>{label(row.field.labels, device.language)}</Txt></View><Pill tone={row.changed ? 'warning' : 'success'} icon={row.changed ? ArrowLeftRight : Check} label={`${t(row.changed ? 'measurementChanged' : 'measurementUnchanged')}${row.delta !== null ? ` · ⁦${row.delta > 0 ? '+' : ''}${row.delta}⁩${row.afterUnit ? ` ${t(row.afterUnit)}` : ''}` : ''}`}/></View>
+                <View style={{ flexDirection: dir, gap: 10 }}>
+                    {[{ key: 'beforeMeasurement', shown: value(row.before, row.beforeUnit, row.field.fieldKey), present: row.oldField }, { key: 'afterMeasurement', shown: value(row.after, row.afterUnit, row.field.fieldKey), present: row.newField }].map(side => <View key={side.key} style={{ flex: 1, backgroundColor: colors.bg, borderRadius: 12, padding: 10, gap: 2 }}><Txt muted>{t(side.key)}</Txt><Text style={{ fontSize: 18, fontWeight: '700', color: colors.ink, textAlign: rtl(device.language) ? 'right' : 'left', fontVariant: ['tabular-nums'] }}>{side.shown}</Text>{!side.present && <Txt muted>{t('fieldAbsent')}</Txt>}</View>)}
                 </View>
-                <Txt>{t(row.changed ? 'measurementChanged' : 'measurementUnchanged')}{row.delta !== null ? ` · \u2066${row.delta > 0 ? '+' : ''}${row.delta}\u2069${row.afterUnit ? ` ${t(row.afterUnit)}` : ''}` : ''}</Txt>
             </Card>)}
         </>}
     </Screen>;
